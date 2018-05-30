@@ -1,3 +1,5 @@
+#!/bin/env python2.7
+
 """Test scipts for importing.py"""
 
 from .. import importing

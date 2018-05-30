@@ -1,3 +1,5 @@
+#!/bin/env python2.7
+
 import sys
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -6,7 +8,6 @@ import plotly.graph_objs as go
 import peakutils
 
 '''# TODO:
--add series_peakshow() fn
 -check Martin's disseration for deconvolution
 -add more tests
 -add google style comments to code
@@ -16,6 +17,7 @@ import peakutils
 -add 2D peak labels
 -fix 3D y-axis
 -add plotting series of histograms (see PythonProject folder in chrome)
+-create PyPi account for distrubtion
 '''
 
 """ 04-22-18 - David j Bettinardi - SepKinetics software
@@ -40,31 +42,28 @@ def main(file):
 
 def two_dplot(specdata):
     """Makes an overlapping 2D plot of wavelength vs. kinetics @ all timepoints"""
-#    try:        # duck typing to allow test_function exceptions
-#        specdata = sys.argv[1]
-#    except:
-#        pass
     if not isinstance(specdata, pd.DataFrame):
         specdata = main(specdata)
         specdata.set_index('0', inplace = True)   #reset index as time-series
     else:
         pass
-    return specdata.plot(legend=False, colormap = 'coolwarm')
+    return specdata.plot(legend=False, colormap = 'plasma')
 
 
 def three_dplot(specdata):
     """Makes a 3D surface plot"""
-#    try:        # duck typing to allow test_function exceptions
-#        filename = sys.argv[1]
-#    except:
-#        pass
-    df = main(specdata)
-    df2 = df.set_index('0')
+    if not isinstance(specdata, pd.DataFrame):
+        specdata = main(specdata)
+        specdata.set_index('0', inplace = True)   #reset index as time-series
+    else:
+        pass
+    #specdata2 = specdata.copy()
+    #specdata2.set_index('0', inplace = True)
 
-    y = df.iloc[:,0].tolist()   # attempt to overwrite y-axis
+    #y = specdata.iloc[:,0].tolist()   # attempt to overwrite y-axis
 
-    '''Working plotter, wrong y-axis!'''    # MUST FIX
-    data = [go.Surface(z=df2.as_matrix(), y=y, colorscale='Viridis')]     # transform to matrix for surface plot
+    '''Working plotter, wrong y-axis'''    # MUST FIX
+    data = [go.Surface(z=specdata.as_matrix(), colorscale='Viridis')]     # transform to matrix for surface plot
 
     layout = go.Layout(
                     scene = dict(
@@ -84,8 +83,8 @@ if __name__ == '__main__':
     try:
         specdata = sys.argv[1]
     except:
-        raise ValueError('Specify the .csv you wish to import')
+        raise ValueError('Specify the .csv you wish to import :)')
 
-    two_dplot(specdata)
+    #two_dplot(specdata)
     #three_dplot(specdata)
-    plt.show()
+    #plt.show()

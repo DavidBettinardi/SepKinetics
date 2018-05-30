@@ -1,3 +1,5 @@
+#!/bin/env python2.7
+
 from importing import main, two_dplot, three_dplot
 import sys
 import pandas as pd
@@ -5,6 +7,8 @@ import matplotlib.pyplot as plt
 import plotly.offline as py
 import plotly.graph_objs as go
 import peakutils
+import numpy as np
+#from sklearn.decomposition import PCA
 
 
 def baseline(specdata):
@@ -59,20 +63,95 @@ def series_baseline(seriesdata):
     corrected_spectra = df.copy()   # make a deep copy to the dataframe
 
     for i in xrange(len(df.iloc[0,:])):     # execute baseline-identifier algorithm by column
-        baseline_series.iloc[:,i] = peakutils.baseline(df.iloc[:,i])
+        baseline_series.iloc[:,i] = peakutils.baseline(df.iloc[:,i], deg = 3)    # overwrite the df data
     corrected_spectra = df - baseline_series    # subtract from original spectra to find correction
+    corrected_spectra_indexes = corrected_spectra.reset_index()
+    #print corrected_spectra_indexes
+    return baseline_series, corrected_spectra, corrected_spectra_indexes
 
-    return baseline_series, corrected_spectra
+
+def series_peakfind(specdata, threshold = 0.2, min_dist=50):
+    "Produces a list of lists containing the peaks at each timepoint"
+    if not isinstance(specdata, pd.DataFrame):  # check datatype
+        specdata = main(specdata)
+        specdata.set_index('0', inplace = True)   #reset index as time-series
+        print 'Warning: This series is not baseline corrected!'
+    else:
+        pass
+
+    indexes=[]      # initialize the empty array
+    for i in xrange(len(specdata.iloc[0,:])):     # execute peakfinding algorithm by column
+        individual_spectrum = specdata.iloc[:,i]
+        indexes.append(peakutils.indexes(individual_spectrum, min_dist= min_dist, thres = threshold/max(individual_spectrum)))
+    return indexes
 
 
-def midpoint_spectrum(specdata):
-    """Finds the midpoint-in-time spectrum from a spectral series"""
+def midpoint(specdata):
+    """Finds major/minor peaks according to threshold values; Threshold
+    value is divided by max peak height"""
+    if not isinstance(specdata, pd.DataFrame):  # check datatype
+        specdata = main(specdata)
+        specdata.set_index('0', inplace = True)   #reset index as time-series
+    else:
+        pass
     midpoint = (len(specdata.iloc[0,:]))/2    # find the mid-timepoint
     midpoint_spectrum = specdata.iloc[:, midpoint]    # find the midpoint spectrum
     return midpoint_spectrum
 
 
-def peakfind(specdata, threshold = 0.02):
+def peakdet(v, delta, x = None):
+    """
+    From: https://gist.github.com/endolith/250860
+    """
+    maxtab = []
+    mintab = []
+
+    if x is None:
+        x = np.arange(len(v))
+
+    v = np.asarray(v)
+    print v
+
+    if len(v) != len(x):
+        sys.exit('Input vectors v and x must have same length')
+
+    if not np.isscalar(delta):
+        sys.exit('Input argument delta must be a scalar')
+
+    if delta <= 0:
+        sys.exit('Input argument delta must be positive')
+
+    mn, mx = np.Inf, -np.Inf
+    mnpos, mxpos = np.NaN, np.NaN
+
+    lookformax = True
+
+    for i in np.arange(len(v)):
+        this = v[i]
+        if this > mx:
+            mx = this
+            mxpos = x[i]
+        if this < mn:
+            mn = this
+            mnpos = x[i]
+
+        if lookformax:
+            if this < mx-delta:
+                maxtab.append((mxpos, mx))
+                mn = this
+                mnpos = x[i]
+                lookformax = False
+        else:
+            if this > mn+delta:
+                mintab.append((mnpos, mn))
+                mx = this
+                mxpos = x[i]
+                lookformax = True
+
+    return np.array(maxtab)
+
+
+def midpoint_peakfind(specdata):
     """Finds major/minor peaks according to threshold values; Threshold
     value is divided by max peak height"""
 
@@ -82,16 +161,12 @@ def peakfind(specdata, threshold = 0.02):
     else:
         pass
 
+    midpoint = (len(specdata.iloc[0,:]))/2    # find the mid-timepoint
+    midpoint_spectrum = specdata.iloc[:, midpoint]    # find the midpoint spectrum
+
     # exectue the peak finding on this spectrum
-    indices = peakutils.indexes(midpoint_spectrum, thres=threshold/max(midpoint_spectrum))
-    return indices
-
-
-def peakshow():
-    """Plots peaks found in peakfind"""
-    indices, midpoint_spectrum = peakfind() # obtain midpoint peak data
-
-    # trace the midpoint spectrum
+    indices = signal.find_peaks_cwt(midpoint_spectrum)
+        # trace the midpoint spectrum
     spectrum = go.Scatter(
         x=[j for j in range(len(midpoint_spectrum))],
         y=midpoint_spectrum,
@@ -116,38 +191,66 @@ def peakshow():
     return py.plot(data)
 
 
-def series_peakfind(specdata, threshold = 0.05):
-    if not isinstance(specdata, pd.DataFrame):  # check datatype
-        specdata = main(specdata)
-        specdata.set_index('0', inplace = True)   #reset index as time-series
-    else:
-        pass
-
-    indexes=[]
-    for i in xrange(len(specdata.iloc[0,:])):     # execute baseline-identifier algorithm by column
-        individual_spectrum = specdata.iloc[:,i]
-        indexes.append(peakutils.indexes(individual_spectrum, thres = threshold/max(individual_spectrum)))
-    # exectue the peak finding on this spectrum
-    #indexes = peakutils.indexes(midpoint_spectrum, thres=threshold/max(midpoint_spectrum))
-    return indexes
-
-
-#def series_peakshow(specdata, indexes):    # Next step
-    """Plots peaks found in peakfind"""
-
-
-
-
-
 if __name__ == '__main__':
-    #indices, midpoint_spectrum = peakfind()
-    #baseline(midpoint_spectrum)
-    baseline_series, corrected_spectra = series_baseline(sys.argv[1])
+    try:
 
-    #two_dplot(sys.argv[1]), two_dplot(baseline_series), two_dplot(corrected_spectra)
+        specdata = sys.argv[1]
+
+    except:
+        raise ValueError("Specify the .csv you wish to import")
+
+    baseline_series, corrected_spectra, corrected_spectra_indexes = series_baseline(specdata)
+    #two_dplot(specdata), two_dplot(baseline_series), two_dplot(corrected_spectra)
+    #two_dplot(corrected_spectra.iloc[50:150,1:])
+    #plt.show()
+    #three_dplot(corrected_spectra)
+
+    lambda1=-np.log(corrected_spectra.iloc[88,15:])
+    lambda2=-np.log(corrected_spectra.iloc[110,15:])
+    lambda3=-np.log(corrected_spectra.iloc[125,15:])
+
+    lambda1.plot(legend=True)
+    lambda2.plot(legend=True)
+    lambda3.plot(legend=True)
+
     #plt.show()
 
+    x = [float(i) for i in lambda1.index.values.tolist()]
+    regress = np.polyfit(lambda1,x,3)
+    p = np.poly1d(regress)
+    d = np.polyder(p)
+    print p
+    print d
 
-    #fig = series_peakfind(sys.argv[1])
-    #two_dplot(fig)
+
+
+
+    ''' Peak finding util
+    from matplotlib.pyplot import plot, scatter, show
+    baseline_series, corrected_spectra = series_baseline(specdata)
+    midpoint = corrected_spectra.iloc[60:150,199]
+    series = np.asarray(midpoint)
+    maxtab = peakdet(series,.0015)
+    plot(series)
+    scatter(np.array(maxtab)[:,0], np.array(maxtab)[:,1], color='red')
+    show()
+    '''
+
+
+
+
+    # Implementation of Principal Component Analysis (PCA)
+    #specdata = main(specdata)
+    #specdata.set_index('0', inplace = True)
+    #print specdata
+    #array = specdata.values
+    #print array
+    #pca = PCA(n_components = 1)
+    #pca.fit(array)
+    #comp = pca.components_
+    #print comp
+    #pca = PCA().fit(array)
+    #plt.plot(np.cumsum(pca.explained_variance_ratio_))
+    #plt.xlabel('number of components')
+    #plt.ylabel('cumulative explained variance')
     #plt.show()
