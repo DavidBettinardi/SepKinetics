@@ -152,7 +152,7 @@ def peakdet(v, delta, x = None):
 
 
 def midpoint_peakfind(specdata):
-    """Finds major/minor peaks according to threshold values; Threshold
+    """Finds major peaks according to threshold values; Threshold
     value is divided by max peak height"""
 
     if not isinstance(specdata, pd.DataFrame):  # check datatype
@@ -191,6 +191,54 @@ def midpoint_peakfind(specdata):
     return py.plot(data)
 
 
+def initial_rates(corrected, time, lam1=88, lam2=110, lam3=125):
+    """Takes a kinetic dataset and the initial rate method for
+    determining kinetics constants for zero-order reactions at
+    over a period of time at the specified wavelengths (default
+    = Nd peaks)"""
+    print 'Calculating Rate Constants by Initial Rate Method...'
+
+    lambda1=(corrected.iloc[lam1,15:])
+    lambda2=(corrected.iloc[lam2,15:])
+    lambda3=(corrected.iloc[lam3,15:])
+
+    t1 = [float(i) for i in lambda1.index.values.tolist()]  # time is shared among spectra
+
+    regress1 = np.polyfit(t1[0:time], lambda1[0:time], 2)    # find a polynomial fit
+    regress2 = np.polyfit(t1[0:time], lambda2[0:time], 2)    # find a polynomial fit
+    regress3 = np.polyfit(t1[0:time], lambda3[0:time], 2)    # find a polynomial fit
+
+    p1 = np.poly1d(regress1)  # extablish the standalone polynomial eq
+    p2 = np.poly1d(regress2)  # extablish the standalone polynomial eq
+    p3 = np.poly1d(regress3)  # extablish the standalone polynomial eq
+
+    plist1 = [p1(i) for i in t1[0:time]]  # find value at each timepoint
+    plist2 = [p2(i) for i in t1[0:time]]  # find value at each timepoint
+    plist3 = [p3(i) for i in t1[0:time]]  # find value at each timepoint
+
+    # plot data and regressors together
+    plt.plot(t1[0:(time*2)], lambda1[0:(time*2)])
+    plt.plot(t1[0:(time*2)], lambda2[0:(time*2)])
+    plt.plot(t1[0:(time*2)], lambda3[0:(time*2)])
+    plt.plot(t1[0:time], plist1, '--')
+    plt.plot(t1[0:time], plist2, '--')
+    plt.plot(t1[0:time], plist3, '--')
+    plt.legend(title='Wavelengths')
+    plt.title('Absorption kinetics with overlayed regressors')
+    plt.show()
+
+    d1 = np.polyder(p1)   # find the derivative function of the polynomial
+    d2 = np.polyder(p2)   # find the derivative function of the polynomial
+    d3 = np.polyder(p3)   # find the derivative function of the polynomial
+
+    # print the derivative of the regressor at t=0 to find the initial rate
+    print 'k_observed @', corrected.index[lam1], 'nm = ', d1(t1[0])
+    print 'k_observed @', corrected.index[lam2], 'nm = ', d2(t1[0])
+    print 'k_observed @', corrected.index[lam3], 'nm = ', d3(t1[0])
+
+    return d1(t1[0]), d2(t1[0]), d3(t1[0])
+
+
 if __name__ == '__main__':
     try:
 
@@ -205,24 +253,32 @@ if __name__ == '__main__':
     #plt.show()
     #three_dplot(corrected_spectra)
 
-    lambda1=-np.log(corrected_spectra.iloc[88,15:])
-    lambda2=-np.log(corrected_spectra.iloc[110,15:])
-    lambda3=-np.log(corrected_spectra.iloc[125,15:])
+    initial_rates(corrected_spectra, 100)
 
-    lambda1.plot(legend=True)
-    lambda2.plot(legend=True)
-    lambda3.plot(legend=True)
+    '''
+    k1a= (lambda1[20] - lambda1[0])/(t1[20]-t1[0])
+    k1b= (lambda1[40] - lambda1[20])/(t1[20]-t1[0])
+    k1c= (lambda1[60] - lambda1[40])/(t1[20]-t1[0])
+    if k1a<k1b or k1b<k1c:
+        print 'bad slopes'
 
-    #plt.show()
+    print k1a, k1b, k1c
 
-    x = [float(i) for i in lambda1.index.values.tolist()]
-    regress = np.polyfit(lambda1,x,3)
-    p = np.poly1d(regress)
-    d = np.polyder(p)
-    print p
-    print d
+    difference = ((k1b-k1a) + (k1c-k1b))/2
+    print 'k(0) @576nm = ', k1a - difference
 
+    k2a= (lambda2[20] - lambda2[0])/(t1[20]-t1[0])
+    k2b= (lambda2[40] - lambda2[20])/(t1[20]-t1[0])
+    k2c= (lambda2[60] - lambda2[40])/(t1[20]-t1[0])
+    difference = ((k1b-k1a) + (k1c-k1b))/2
+    print 'k(0) @583nm = ', k2a - difference
 
+    k3a= (lambda3[20] - lambda3[0])/(t1[20]-t1[0])
+    k3b= (lambda3[40] - lambda3[20])/(t1[20]-t1[0])
+    k3c= (lambda3[60] - lambda3[40])/(t1[20]-t1[0])
+    difference = ((k1b-k1a) + (k1c-k1b))/2
+    print 'k(0) @588nm = ', k3a - difference
+    '''
 
 
     ''' Peak finding util
